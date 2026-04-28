@@ -1,0 +1,12 @@
+# Ignore the STM32CubeF4 library — too large, users clone it separately
+STM32CubeF4/
+
+# Build artifacts
+*.o
+*.elf
+*.bin
+*.map
+
+# OS
+.DS_Store
+Thumbs.db
