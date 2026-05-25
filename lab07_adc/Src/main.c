@@ -23,15 +23,15 @@ int main(void)
     ADC1_DMA_Init();
 
     /* Start ADC in continuous mode with DMA
-     * The ADC will sample forever and DMA fills adc_buffer automatically 
-     HAL_ADC_Start_DMA dice al hardware:
-        1. ADC, empieza a muestrear continuamente
-        2. DMA, copia cada resultado a adc_buffer
-        3. Cuando llegues al final del buffer, reinicia (circular mode)
+     * The ADC will sample forever and DMA fills adc_buffer automatically
+     * HAL_ADC_Start_DMA tells the hardware:
+     *   1. ADC, start sampling continuously
+     *   2. DMA, copy each result to adc_buffer
+     *   3. When you reach the end of the buffer, restart (circular mode)
      */
-    HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc_buffer, ADC_SAMPLES); // a partir de aqui el hardware correo solo - el CPU es libre
+    HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc_buffer, ADC_SAMPLES); // from here the hardware runs on its own — CPU is free
 
-    char buf[64]; //buffer para uart
+    char buf[64]; // UART transmit buffer
 
     while(1)
     {
@@ -75,7 +75,7 @@ void SystemClock_Config(void)
 
 void ADC1_DMA_Init(void)
 {
-    // el ADC1 usa DMA2 no DMA1.
+    // ADC1 uses DMA2, not DMA1
     __HAL_RCC_DMA2_CLK_ENABLE();
 
     /* ── DMA for ADC1 — DMA2 Stream0 Channel0 ── */
@@ -86,29 +86,29 @@ void ADC1_DMA_Init(void)
     hdma_adc1.Init.MemInc              = DMA_MINC_ENABLE;
     hdma_adc1.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;  /* 16 bits */
     hdma_adc1.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;
-    hdma_adc1.Init.Mode                = DMA_CIRCULAR;//Sin esto el DMA pararía después de la primera muestra. Para ADC continuo necesitamos circular.
-    hdma_adc1.Init.Priority            = DMA_PRIORITY_HIGH; //Prioridad alta — el ADC es sensible al timing. Si tarda el DMA, perdemos muestras.
+    hdma_adc1.Init.Mode                = DMA_CIRCULAR; // Without this, DMA would stop after the first sample. Circular mode is required for continuous ADC.
+    hdma_adc1.Init.Priority            = DMA_PRIORITY_HIGH; // High priority — ADC is timing-sensitive. If DMA is delayed, samples are lost.
     hdma_adc1.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
     HAL_DMA_Init(&hdma_adc1);
 
-    __HAL_LINKDMA(&hadc1, DMA_Handle, hdma_adc1);//Link DMA con ADC — igual que con UART. Sin esto el ADC no sabe qué DMA usar.
+    __HAL_LINKDMA(&hadc1, DMA_Handle, hdma_adc1); // Link DMA to ADC — same as with UART. Without this the ADC doesn't know which DMA to use.
 
-    //Habilita la interrupción del DMA
+    // Enable DMA interrupt
     HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
-    //Esto habilita la interrupción. Cuando el DMA termina una vuelta del buffer dispara la IRQ
+    // This enables the interrupt. When the DMA completes one pass through the buffer it fires the IRQ.
     HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
 
     /* ── ADC1 configuration ── */
     hadc1.Instance                   = ADC1;
     hadc1.Init.ClockPrescaler        = ADC_CLOCK_SYNC_PCLK_DIV4;
-    hadc1.Init.Resolution            = ADC_RESOLUTION_12B;//12 bits → 0 a 4095
-    hadc1.Init.ScanConvMode          = DISABLE;//Scan mode = muestrear múltiples canales en secuencia. Como solo tenemos 1 canal (PA1) lo desactivamos.
-    hadc1.Init.ContinuousConvMode    = ENABLE;//Modo continuo — el ADC muestrea sin parar
+    hadc1.Init.Resolution            = ADC_RESOLUTION_12B; // 12 bits → 0 to 4095
+    hadc1.Init.ScanConvMode          = DISABLE; // Scan mode = sample multiple channels in sequence. Since we only have 1 channel (PA1), disable it.
+    hadc1.Init.ContinuousConvMode    = ENABLE;  // Continuous mode — ADC samples non-stop
     hadc1.Init.DiscontinuousConvMode = DISABLE;
     hadc1.Init.ExternalTrigConvEdge  = ADC_EXTERNALTRIGCONVEDGE_NONE;
     hadc1.Init.DataAlign             = ADC_DATAALIGN_RIGHT;
     hadc1.Init.NbrOfConversion       = 1;
-    hadc1.Init.DMAContinuousRequests = ENABLE;       //DMA loops too - Hace que el ADC siga pidiendo transferencias DMA indefinidamente.
+    hadc1.Init.DMAContinuousRequests = ENABLE;       // DMA loops too — makes the ADC keep requesting DMA transfers indefinitely.
     hadc1.Init.EOCSelection          = ADC_EOC_SINGLE_CONV;
     HAL_ADC_Init(&hadc1);
 
@@ -129,9 +129,9 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
         __HAL_RCC_ADC1_CLK_ENABLE();
         __HAL_RCC_GPIOA_CLK_ENABLE();
 
-        /* PA1 = ADC1_IN1 — analog mode */
+        /* PA1 = ADC1_IN1 — analog input mode */
         GPIO_InitStruct.Pin  = GPIO_PIN_1;
-        GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;//entrada analogica
+        GPIO_InitStruct.Mode = GPIO_MODE_ANALOG; // analog input
         GPIO_InitStruct.Pull = GPIO_NOPULL;
         HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
     }
@@ -168,7 +168,9 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart)
     }
 }
 
-/* ── IRQ Handlers ────────────────────────────────────── función que se ejecuta cuando ocurre la int*/
+/* ── IRQ Handlers ─────────────────────────────────────
+ * Function executed when the interrupt fires
+ */
 void DMA2_Stream0_IRQHandler(void)
 {
     HAL_DMA_IRQHandler(&hdma_adc1);
@@ -180,30 +182,25 @@ void SysTick_Handler(void)
 }
 
 
-
-
-
 /*
 HAL_ADC_Start_DMA
         │
         ▼
-ADC arranca → muestrea PA1 → guarda en DR
+ADC starts → samples PA1 → stores in DR
         │
         ▼
-DMA copia DR → adc_buffer[0]
+DMA copies DR → adc_buffer[0]
         │
         ▼
-ADC vuelve a muestrear (modo continuo)
+ADC samples again (continuous mode)
         │
         ▼
-DMA vuelve a copiar (modo circular)
+DMA copies again (circular mode)
         │
-... loop infinito en hardware ...
+... infinite hardware loop ...
 
-Mientras tanto en main:
+Meanwhile in main:
         │
         ▼
-cada 100ms → leer adc_buffer[0] → imprimir
-
-
+every 100ms → read adc_buffer[0] → print
 */
